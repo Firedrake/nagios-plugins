@@ -22,7 +22,7 @@ $np->add_arg(
 );
 $np->add_arg(
   spec => 'critical|c=i',
-  help => q(CRITICAL if less than INTEGER days remaining),
+  help => 'CRITICAL if less than INTEGER days remaining',
   default => 15,
 );
 $np->add_arg(
