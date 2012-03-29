@@ -1,0 +1,28 @@
+Nagios plugins by RogerBW
+
+check_ssl-cert
+
+Checks a TCP port (IPv4 only) for SSL. Ports 25, 110 and 143 will be
+handled with the STARTTLS procedures appropriate to those protocols;
+other ports (e.g. 443) will attempt a direct SSL connection. (This is
+usually the right thing to do.)
+
+Parameters:
+
+-c, -w - number of days to generated WARNING/CRITICAL before expiry of
+any certificate in the chain. (An expired or not-yet-valid certificate
+is always CRITICAL.)
+
+-H - the host's name or IP address.
+
+-p - the port.
+
+-n - the name of the certificate the host should present.
+
+-C - the path to the certificate repository.
+
+If you have no certificate repository, omit the -n parameter and no
+chain verification will be attempted - the plugin will still confirm
+that an unverified SSL connection is possible and the right certificate
+is presented.
+
