@@ -13,6 +13,7 @@ my $np=Nagios::Plugin->new(shortname => 'SSL',
                            usage => 'Usage: %s -H <host> -w <warningdays> -c <criticaldays> -n <name> -p <port> -C <certpath>',
                            version => 0.1,
                            blurb => 'Tests SSL certificates with/without STARTTLS',
+                           url => 'http://firedrake.org/cgi-bin/gitweb.cgi?p=nagios-plugins.git',
 );
 
 $np->add_arg(
