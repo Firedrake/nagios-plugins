@@ -1,0 +1,261 @@
+#! /usr/bin/perl -w
+
+# nagios: -epn
+use strict;
+use Socket;
+use Net::SSLeay;
+use Date::Parse;
+use Nagios::Plugin;
+use Nagios::Plugin::Getopt;
+use POSIX qw(strftime);
+
+my $np=Nagios::Plugin->new(shortname => 'SSL',
+                           usage => 'Usage: %s -H <host> -w <warningdays> -c <criticaldays> -n <name> -p <port> -C <certpath>',
+                           version => 0.1,
+                           blurb => 'Tests SSL certificates with/without STARTTLS',
+);
+
+$np->add_arg(
+  spec => 'warning|w=i',
+  help => 'WARNING if less than INTEGER days remaining',
+  default => 30,
+);
+$np->add_arg(
+  spec => 'critical|c=i',
+  help => q(CRITICAL if less than INTEGER days remaining),
+  default => 15,
+);
+$np->add_arg(
+  spec => 'host|H=s',
+  help => 'Hostname or IP address to test',
+  required => 1,
+);
+$np->add_arg(
+  spec => 'name|n=s',
+  help => 'Name to verify in CN',
+  default => '',
+);
+$np->add_arg(
+  spec => 'certpath|C=s',
+  help => 'Path to certificate repository',
+  default => '/etc/ssl/certs',
+);
+$np->add_arg(
+  spec => 'port|p=i',
+  help => 'Connection port',
+  default => '443',
+);
+
+$np->getopts;
+my $ng=$np->opts;
+my %opt=map {$_->[0] => 86400*$ng->get($_->[1])} ([w => 'warning'],[c => 'critical']);
+map {$opt{$_->[0]}=$ng->get($_->[1])} ([H => 'host'],
+                                       [n => 'name'],
+                                       [p => 'port'],
+                                       [C => 'certpath']);
+
+Net::SSLeay::load_error_strings();
+Net::SSLeay::SSLeay_add_ssl_algorithms();
+Net::SSLeay::randomize();
+
+my $verify=0;
+my %seen;
+
+$opt{p} = getservbyname ($opt{p}, 'tcp') unless $opt{p} =~ /^\d+$/;
+
+if ($opt{H} =~ /^\d+\.\d+\.\d+\.\d+$/) {
+  $opt{H}=inet_aton($opt{H});
+} else {
+  $opt{H}=gethostbyname($opt{H});
+}
+
+my $dest_serv_params  = sockaddr_in($opt{p}, $opt{H}) or $np->nagios_die("sockaddr_in: $!");
+
+socket  (S, &AF_INET, &SOCK_STREAM, 0)  or $np->nagios_die("socket: $!");
+connect (S, $dest_serv_params)          or $np->nagios_die("connect: $!");
+select  (S); $| = 1; select (STDOUT);   # Eliminate STDIO buffering
+
+my $tls=0;
+if ($opt{p} == 25) { # SMTP with TLS
+  my $buffer='';
+  while ($buffer !~ /^2\d\d /m) {
+    recv(S, $buffer, 8192,0);
+  }
+  my $ehlo=$opt{n} || 'localhost';
+  send(S, "EHLO $ehlo\r\n", 0);
+  $buffer='';
+  while ($buffer !~ /^2\d\d /m) {
+    recv(S, $buffer, 8192,0);
+    if ($buffer =~ /^2\d\d-STARTTLS/m) {
+      $tls=1;
+    } elsif ($buffer =~ /^5\d\d/m) {
+      last;
+    }
+  }
+  if ($tls) {
+    $tls=0;
+    send(S, "STARTTLS\r\n", 0);
+    $buffer='';
+    while ($buffer !~ /^2\d\d /m) {
+      recv(S, $buffer, 8192,0);
+      if ($buffer =~ /^2\d\d/m) {
+        $tls=1;
+      } elsif ($buffer =~ /^5\d\d/m) {
+        $tls=0;
+        last;
+      }
+    }
+  }
+} elsif ($opt{p} == 110) { # POP3 with TLS
+  my $buffer='';
+  while ($buffer !~ /^\+OK /m) {
+    recv(S, $buffer, 8192,0);
+  }
+  send(S, "CAPA\r\n", 0);
+  $buffer='';
+  while ($buffer !~ /^\+OK/m) {
+    recv(S, $buffer, 8192,0);
+    if ($buffer =~ /^STLS/m) {
+      $tls=1;
+    } elsif ($buffer =~ /^-ERR/m) {
+      last;
+    }
+  }
+  if ($tls) {
+    $tls=0;
+    send(S, "STLS\r\n", 0);
+    $buffer='';
+    while ($buffer !~ /^\+OK/m) {
+      recv(S, $buffer, 8192,0);
+      if ($buffer =~ /^\+OK/m) {
+        $tls=1;
+      } elsif ($buffer =~ /^-ERR/m) {
+        $tls=0;
+        last;
+      }
+    }
+  }
+} elsif ($opt{p} == 143) { # IMAP4 with TLS
+  my $buffer='';
+  while ($buffer !~ /\* OK /m) {
+    recv(S, $buffer, 8192,0);
+  }
+  send(S, "a01 CAPABILITY\r\n", 0);
+  $buffer='';
+  while ($buffer !~ /^a01 OK/m) {
+    recv(S, $buffer, 8192,0);
+    if ($buffer =~ /STARTTLS/m) {
+      $tls=1;
+    } elsif ($buffer =~ /BAD/m) {
+      last;
+    }
+  }
+  if ($tls) {
+    $tls=0;
+    send(S, "a02 STARTTLS\r\n", 0);
+    $buffer='';
+    while ($buffer !~ /^a02 OK/m) {
+      recv(S, $buffer, 8192,0);
+      if ($buffer =~ /^a02 OK/m) {
+        $tls=1;
+      } elsif ($buffer =~ /BAD/m) {
+        $tls=0;
+        last;
+      }
+    }
+  }
+} else {
+  $tls=1;
+}
+
+my @critfail;
+my @warnfail;
+my @ok;
+my @certchain;
+
+my $host;
+if ($tls) {
+  # The network connection is now open, let's fire up SSL
+
+  my $ctx = Net::SSLeay::CTX_new() or $np->nagios_die("Failed to create SSL_CTX $!");
+  Net::SSLeay::CTX_set_options($ctx, &Net::SSLeay::OP_ALL);
+  #     and die_if_ssl_error("ssl ctx set options");
+
+  if ($opt{n}) {
+    Net::SSLeay::CTX_load_verify_locations($ctx, '', $opt{C});
+    $verify=1;
+    Net::SSLeay::CTX_set_verify($ctx,&Net::SSLeay::VERIFY_PEER,\&cb);
+  }
+
+  my $ssl = Net::SSLeay::new($ctx) or $np->nagios_die("Failed to create SSL $!");
+  Net::SSLeay::set_fd($ssl, fileno(S));   # Must use fileno
+  my $res = Net::SSLeay::connect($ssl);
+  unless ($res) {
+    $np->nagios_die('no connect');
+  }
+  # and die_if_ssl_error("ssl connect");
+  #print "Cipher `" . Net::SSLeay::get_cipher($ssl) . "'\n";
+
+  my $x509 = Net::SSLeay::get_peer_certificate($ssl) || $np->nagios_die('no peer cert');
+  my $subject=Net::SSLeay::X509_NAME_oneline(Net::SSLeay::X509_get_subject_name($x509));
+  my %h=grep /./,(split /\/([A-Za-z]+)=/,$subject);
+  $host=$h{CN}||$h{OU}||'unnamed cert';
+  if ($opt{n} && $host ne $opt{n}) {
+    push @critfail,"Returned name $h{CN} doesn't match";
+  }
+
+  # Exchange data
+
+  CORE::shutdown S, 1;  # Half close --> No more output, sends EOF to server
+
+  Net::SSLeay::free ($ssl);               # Tear down connection
+  Net::SSLeay::CTX_free ($ctx);
+} else {
+  push @critfail,'Unable to establish TLS';
+}
+close S;
+
+my $message=join('; ',@critfail,@warnfail);
+
+if (@critfail) {
+  $np->nagios_exit(CRITICAL,$message);
+} elsif (@warnfail) {
+  $np->nagios_exit(WARNING,$message);
+} else {
+  $np->nagios_exit(OK,"Port $opt{p} is $host");
+  exit 0;
+}
+
+sub cb {
+  my ($ok,$storectx)=@_;
+  unless ($ok) {
+    $verify=0;
+  }
+  my $x509=Net::SSLeay::X509_STORE_CTX_get_current_cert($storectx);
+  my $subject=Net::SSLeay::X509_NAME_oneline(Net::SSLeay::X509_get_subject_name($x509));
+  unless (exists $seen{$subject}) {
+    $seen{$subject}=1;
+    my $a = str2time(Net::SSLeay::P_ASN1_UTCTIME_put2string(Net::SSLeay::X509_get_notBefore($x509)));
+    my $b = str2time(Net::SSLeay::P_ASN1_UTCTIME_put2string(Net::SSLeay::X509_get_notAfter($x509)));
+    my $t=time;
+    my %h=grep /./,(split /\/([A-Za-z]+)=/,$subject);
+    my $name=$h{CN}||$h{OU}||'unnamed cert';
+    push @certchain,$name;
+    my $exp=strftime('%d %b %Y',localtime($b));
+    unless ($ok) {
+      push @critfail,"Certificate $name failed to verify";
+    }
+    if ($a >$t) {
+      push @critfail,"Certificate $name not yet valid";
+    } elsif ($b<$t) {
+      push @critfail,"Certificate $name expired";
+    } elsif ($b-$t < $opt{c}) {
+      push @critfail,"Certificate $name expires on $exp";
+    } elsif ($b-$t < $opt{w}) {
+      push @warnfail,"Certificate $name expires on $exp";
+#    } else {
+#      warn "$name OK\n";
+    }
+  }
+  return 1;
+}
