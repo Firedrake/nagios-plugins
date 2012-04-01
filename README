@@ -1,15 +1,18 @@
 Nagios plugins by RogerBW
 
-check_ssl-cert
 
-Checks a TCP port (IPv4 only) for SSL. Ports 25, 110 and 143 will be
+:check_ssl-cert
+
+This is the SSL equivalent of check_tcp; it checks a TCP port (IPv4
+only) to make sure (a) it can establish an SSL connection and (b) that
+the certificate presented is valid. Ports 25, 110 and 143 will be
 handled with the STARTTLS procedures appropriate to those protocols;
 other ports (e.g. 443) will attempt a direct SSL connection. (This is
 usually the right thing to do.)
 
 Parameters:
 
--c, -w - number of days to generated WARNING/CRITICAL before expiry of
+-c, -w - number of days to generate WARNING/CRITICAL before expiry of
 any certificate in the chain. (An expired or not-yet-valid certificate
 is always CRITICAL.)
 
@@ -23,6 +26,13 @@ is always CRITICAL.)
 
 If you have no certificate repository, omit the -n parameter and no
 chain verification will be attempted - the plugin will still confirm
-that an unverified SSL connection is possible and the right certificate
-is presented.
+that an unverified SSL connection is possible, though this isn't
+terribly useful.
+
+
+:check_alldisks_ide_smart
+
+Intended to be run via NRPE; looks down /dev/disk/by-id and runs
+check_ide_smart on each distinct entry that starts with ata- or scsi-,
+then returns a summary result.
 
