@@ -77,7 +77,7 @@ connect (S, $dest_serv_params)          or $np->nagios_die("connect: $!");
 select  (S); $| = 1; select (STDOUT);   # Eliminate STDIO buffering
 
 my $tls=0;
-if ($opt{p} == 25) { # SMTP with TLS
+if ($opt{p} == 25 || $opt{p} == 587) { # SMTP with TLS
   my $buffer='';
   while ($buffer !~ /^2\d\d /m) {
     recv(S, $buffer, 8192,0);
