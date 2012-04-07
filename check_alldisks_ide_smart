@@ -45,7 +45,7 @@ if (@db) {
     close TEST;
     my $code=$?;
     if ($code==3) { # unknown
-      if ($worst != 1 && $worst != 1 && $worst != 4) {
+      if ($worst != 2 && $worst != 1 && $worst != 4) {
         $worst=$code;
       }
     } elsif ($code==4) { # pending
