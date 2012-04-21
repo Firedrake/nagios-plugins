@@ -1,0 +1,106 @@
+#! /usr/bin/perl -w
+
+use strict;
+use List::Util qw(max);
+
+# sudoers:
+# nagios	ALL=NOPASSWD: /usr/local/bin/arcconf GETCONFIG 1 *
+
+my @arcconf=('/usr/bin/sudo','/usr/local/bin/arcconf');
+
+my $ld;
+my @statuses=(0);
+my @messages;
+open (LD,'-|',@arcconf,'GETCONFIG',1,'LD');
+while (<LD>) {
+  chomp;
+  if (/^Logical device number ([0-9]+)/) {
+    $ld=$1;
+  } elsif (/^\s*Failed stripes\s*:\s*(.*)/) {
+    my $s=$1;
+    if ($s eq 'Yes') {
+      push @statuses,2;
+      push @messages,"Logical device $ld: failed stripe";
+    }
+  } elsif (/^\s*Status of logical device\s*:\s*(.*)/) {
+    my $s=$1;
+    if ($s ne 'Optimal') {
+      if ($s =~ /Fault Tolerant/) {
+        push @statuses,1;
+      } else {
+        push @statuses,2;
+      }
+      push @messages,"Logical device $ld: $s";
+    }
+  }
+}
+close LD;
+
+open (PD,'-|',@arcconf,'GETCONFIG',1,'PD');
+my $device;
+my %status;
+while (<PD>) {
+  chomp;
+  if (/^\s*Device #(\d+)/ || $_ eq '') {
+    my $newdevice=$1 || '';
+    if (defined $device && length($device)>0 && %status) {
+      my @info;
+      if ($status{state} ne 'Online') {
+        push @statuses,2;
+        push @info,"state $status{state}";
+      }
+      if (@info) {
+        push @messages,"Device #$device ".$status{'serial number'}.": ".join(', ',@info);
+      }
+    }
+    $device=$newdevice;
+    %status=();
+  } elsif (/^\s*([^:]+?)\s*:\s*(.*)/) {
+    $status{lc($1)}=$2;
+  }
+}
+close PD;
+
+open (AD,'-|',@arcconf,'GETCONFIG',1,'AD');
+while (<AD>) {
+  chomp;
+  if (/^\s*Controller Status\s*:\s*(.*)/) {
+    if ($1 ne 'Optimal') {
+      push @statuses,2;
+      push @messages,"Controller: $1";
+    }
+  } elsif (/^\s*Defunct disk drive count\s:\s*([0-9]+)/) {
+    if ($1 > 0) {
+      push @statuses,2;
+      push @messages,"Defunct drives: $1";
+    }
+  } elsif (m!^\s*Logical devices/Failed/Degraded\s*:\s*([0-9]+)/([0-9]+)/([0-9]+)!) {
+    if ($2 > 0) {
+      push @statuses,2;
+      push @messages,"Failed devices: $2";
+    }
+    if ($3 > 0) {
+      push @statuses,2;
+      push @messages,"Degraded devices: $3";
+    }
+  } elsif (/^\s*Status\s:\s*(.*)/) {
+    unless ($1 eq 'Not Installed' ||
+            $1 eq 'Charging' ||
+            $1 eq 'Optimal') {
+      push @statuses,2;
+      push @messages,"Battery status: $1";
+    }
+  }
+}
+close AD;
+
+unlink 'UcliEvt.log';
+unless (@messages) {
+  push @messages,'All OK';
+}
+
+if (@messages) {
+  print join('; ',@messages),"\n";
+}
+exit max(@statuses);
+

@@ -39,3 +39,10 @@ Intended to be run via NRPE; looks down /dev/disk/by-id and runs
 check_ide_smart on each distinct entry that starts with ata- or scsi-,
 then returns a summary result.
 
+
+:check_aacraid
+
+Intended to be run via NRPE; assumes you have an Adaptec RAID controller
+and /usr/local/bin/arcconf, and looks for failure states (non-optimal
+arrays, failed stripes, failed drives, non-optimal controllers).
+
