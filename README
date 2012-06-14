@@ -46,3 +46,19 @@ Intended to be run via NRPE; assumes you have an Adaptec RAID controller
 and /usr/local/bin/arcconf, and looks for failure states (non-optimal
 arrays, failed stripes, failed drives, non-optimal controllers).
 
+:check__fileage
+
+Checks the age of a named file (or directory). By default, alerts if it
+is older than the set values.
+
+Parameters:
+
+-c, -w - number of seconds to trigger WARNING/CRITICAL alerts.
+
+-f - path to file.
+
+-n - alert if the file is NEWER than the warning/critical threshold.
+
+-m - also alert if the file is missing.
+
+-i - use the inode change time rather than the last-modified time.
