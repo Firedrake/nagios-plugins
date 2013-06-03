@@ -69,3 +69,10 @@ Parameters:
 
 Does a more high-level check than check_http can handle; most
 importantly, accepts and regurgitates cookies during a redirection.
+
+
+:check_running_kernel
+
+Checks that the sub-version of the current kernel matches an installed
+package. Specifically, that the Debian package version of
+linux-image-$(uname -r) matches the last word of uname -v.

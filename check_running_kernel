@@ -1,0 +1,31 @@
+#! /usr/bin/perl -w
+
+# nagios: -epn
+use strict;
+use Nagios::Plugin;
+
+my $np=Nagios::Plugin->new(shortname => 'kernel',
+                           usage => "Usage: %s ",
+                           version => 0.1,
+                           blurb => 'Tests running kernel against Debian package version',
+                           url => 'http://firedrake.org/cgi-bin/gitweb.cgi?p=nagios-plugins.git',
+);
+
+my $r=getoutput(qw(uname -r));
+if ($r) {
+  my $dpkgver=getoutput(qw(dpkg-query -W -f),'${Version}',"linux-image-$r");
+  my $runver=(split ' ',getoutput(qw(uname -v)))[-1];
+  if ($runver ne $dpkgver) {
+    $np->nagios_exit(CRITICAL,"Running $runver, want $dpkgver");
+  } else {
+    $np->nagios_exit(OK,"Running $runver");
+  }
+}
+$np->nagios_exit(UNKNOWN,"Can't get running version");
+
+sub getoutput {
+  open I,'-|',@_;
+  chomp (my $r=join('',<I>));
+  close I;
+  return $r;
+}
