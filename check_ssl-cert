@@ -137,6 +137,33 @@ if ($opt{p} == 25 || $opt{p} == 587) { # SMTP with TLS
       }
     }
   }
+} elsif ($opt{p} == 119) { # NNTP with TLS
+  my $buffer='';
+  while ($buffer !~ /^200 /m) {
+    recv(S, $buffer, 8192,0);
+  }
+  send(S, "CAPABILITIES\r\n", 0);
+  $buffer='';
+  while ($buffer !~ /^\./m) {
+    recv(S, $buffer, 8192,0);
+    if ($buffer =~ /^STARTTLS/m) {
+      $tls=1;
+    }
+  }
+  if ($tls) {
+    $tls=0;
+    send(S, "STARTTLS\r\n", 0);
+    $buffer='';
+    while ($buffer !~ /^\./m) {
+      recv(S, $buffer, 8192,0);
+      if ($buffer =~ /^382 /m) {
+        $tls=1;
+      } elsif ($buffer =~ /^(502|580) /m) {
+        $tls=0;
+        last;
+      }
+    }
+  }
 } elsif ($opt{p} == 143) { # IMAP4 with TLS
   my $buffer='';
   while ($buffer !~ /\* OK /m) {
