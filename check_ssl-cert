@@ -3,7 +3,7 @@
 # nagios: -epn
 use strict;
 use Socket;
-use Net::SSLeay;
+use Net::SSLeay qw(GEN_DNS);
 use Date::Parse;
 use Nagios::Plugin;
 use Nagios::Plugin::Getopt;
@@ -32,9 +32,9 @@ $np->add_arg(
   required => 1,
 );
 $np->add_arg(
-  spec => 'name|n=s',
+  spec => 'name|n:s',
   help => 'Name to verify in CN',
-  default => '',
+  default => undef,
 );
 $np->add_arg(
   spec => 'certpath|C=s',
@@ -54,6 +54,7 @@ map {$opt{$_->[0]}=$ng->get($_->[1])} ([H => 'host'],
                                        [n => 'name'],
                                        [p => 'port'],
                                        [C => 'certpath']);
+$opt{n} = (defined($opt{n})) ? (($opt{n} eq '') ? $opt{H} : $opt{n}) : '';
 
 Net::SSLeay::load_error_strings();
 Net::SSLeay::SSLeay_add_ssl_algorithms();
@@ -183,7 +184,11 @@ if ($tls) {
   #     and die_if_ssl_error("ssl ctx set options");
 
   if ($opt{n}) {
-    Net::SSLeay::CTX_load_verify_locations($ctx, '', $opt{C});
+    if (-f $opt{C}) {
+      Net::SSLeay::CTX_load_verify_locations($ctx, $opt{C}, '');
+    }else {
+      Net::SSLeay::CTX_load_verify_locations($ctx, '', $opt{C});
+    }
     $verify=1;
     Net::SSLeay::CTX_set_verify($ctx,&Net::SSLeay::VERIFY_PEER,\&cb);
   }
@@ -201,9 +206,17 @@ if ($tls) {
   my $subject=Net::SSLeay::X509_NAME_oneline(Net::SSLeay::X509_get_subject_name($x509));
   my %h=grep /./,(split /\/([A-Za-z]+)=/,$subject);
   $host=$h{CN}||$h{OU}||'unnamed cert';
-  if ($opt{n} && $host ne $opt{n}) {
+  if ($opt{n} && $host ne $opt{n} && !match_san($x509,$opt{n})) {
     push @critfail,"Returned name $h{CN} doesn't match";
   }
+  if ($ng->verbose)
+  {
+    my $b = str2time(Net::SSLeay::P_ASN1_UTCTIME_put2string(Net::SSLeay::X509_get_notAfter($x509)));
+    my $exp=strftime('%Y-%m-%d %H:%M:%S +0000',gmtime($b));
+    push @ok,"expires on $exp";
+  }
+
+
 
   # Exchange data
 
@@ -223,8 +236,23 @@ if (@critfail) {
 } elsif (@warnfail) {
   $np->nagios_exit(WARNING,$message);
 } else {
-  $np->nagios_exit(OK,"Port $opt{p} is $host");
+  $message = "Port $opt{p} is $host";
+  $message = join('; ',$message, @ok )
+    if $ng->verbose;
+  $np->nagios_exit(OK,$message);
   exit 0;
+}
+
+sub match_san {
+  my ($x509,$n) = @_;
+  my (@san,$t,$s);
+  @san = Net::SSLeay::X509_get_subjectAltNames($x509);
+  while(  @san )
+  {
+    ($t,$s) = splice @san,0,2;
+    return 1 if ($t == GEN_DNS) && ($s eq $n);
+  }
+  return 0;
 }
 
 sub cb {
