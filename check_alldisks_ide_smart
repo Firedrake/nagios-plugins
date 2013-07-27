@@ -3,17 +3,13 @@
 use strict;
 use File::Find;
 
-#cd /usr/lib/nagios/plugins
-#chgrp nagios check_ide_smart
-#chmod o-x check_ide_smart
-#chmod u+s check_ide_smart 
+# add to /etc/sudoers.d/nagios:
+#nagios        ALL=NOPASSWD: /usr/lib/nagios/plugins/check_ide_smart *
 
 my @da;
 find(sub{
-  if ((-f $_ || -l $_) && /^(ata|scsi)-/) {
-    unless (/-part\d+$/) {
-      push @da,$File::Find::name;
-    }
+  if ((-f $_ || -l $_) && /^((?:ata|scsi)-.*)-part1/) {
+    push @da,'/dev/disk/by-id/'.$1;
   }
 },'/dev/disk/by-id/');
 
@@ -37,13 +33,13 @@ if (@db) {
     my $dn=$disk;
     $dn =~ s/^.*-//;
     $dn =~ s/^SATA_//;
-    open TEST,'-|',qw(/usr/lib/nagios/plugins/check_ide_smart -n -d),$disk;
+    open TEST,'-|',qw(sudo /usr/lib/nagios/plugins/check_ide_smart -n -d),$disk;
     my $input=join('',<TEST>);
     $input =~ s/\s+$//s;
     $input =~ s/\n/, /g;
     push @results,"$dn $input";
     close TEST;
-    my $code=$?;
+    my $code=$? >> 8;
     if ($code==3) { # unknown
       if ($worst != 2 && $worst != 1 && $worst != 4) {
         $worst=$code;
