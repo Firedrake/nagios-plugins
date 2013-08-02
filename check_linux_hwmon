@@ -1,0 +1,103 @@
+#! /usr/bin/perl -w
+
+# nagios: -epn
+use strict;
+use List::Util qw(max);
+use Nagios::Plugin;
+
+my $np=Nagios::Plugin->new(shortname => 'hwmon',
+                           usage => "Usage: %s [-w <warn_temp>] [-c <crit_temp>]",
+                           version => 0.1,
+                           blurb => 'Tests /sys/class/hwmon/* for temperature, fan speed and voltage',
+                           url => 'http://firedrake.org/cgi-bin/gitweb.cgi?p=nagios-plugins.git',
+);
+
+$np->add_arg(
+  spec => 'warning|w=i',
+  help => 'WARNING if higher than INTEGER degrees Celsius',
+  default => 60,
+);
+$np->add_arg(
+  spec => 'critical|c=i',
+  help => 'CRITICAL if higher than INTEGER degrees Celsius',
+  default => 80,
+);
+$np->getopts;
+my $ng=$np->opts;
+
+my $hwmon='/sys/class/hwmon';
+
+unless (-d $hwmon) {
+  $np->nagios_exit(UNKNOWN,"Can't find $hwmon");
+}
+
+chdir $hwmon;
+opendir my $a,'.';
+my @mons=grep /^hwmon\d+$/,readdir $a;
+closedir $a;
+
+my @out;
+my $worst=0;
+foreach my $mon (@mons) {
+  chdir "$hwmon/$mon";
+  opendir my $d,'.';
+  my @files=map {$_ => 1} grep !/^\./,readdir $d;
+  closedir $d;
+  # check fans and voltages
+  foreach my $fanp (grep /^(?:in|fan)\d+_input/,@files) {
+    my ($mode,$id)=($fanp =~ /^(in|fan)(\d+)/);
+    my %d;
+    foreach my $k (qw(input label max min)) {
+      $d{$k}=getline("$mode${id}_$k");
+    }
+    $d{label} =~ s/^\s+//;
+    $d{label} =~ s/\s+$//;
+    $d{label} ||= "$mon/$mode$id";
+    if ($mode eq 'fan' && $d{input}==0) { # have to ignore zero speed
+      next;
+    }
+    if ($mode eq 'in') {
+      map {$d{$_}/=1000} qw(input max min);
+    }
+    if ($d{input}<$d{min}) {
+      push @out,"$d{label} LOW $d{input}/$d{min}";
+      $worst=max($worst,2);
+    } elsif ($d{input}>$d{max}) {
+      push @out,"$d{label} HIGH $d{input}/$d{max}";
+      $worst=max($worst,1);
+    } else {
+      push @out,"$d{label} $d{input}";
+    }
+  }
+  # check temperatures
+  foreach my $temp (grep /^temp\d+_input/,@files) {
+    my ($id)=($temp =~ /^temp(\d+)/);
+    my %d;
+    foreach my $k (qw(input label)) {
+      $d{$k}=getline("temp${id}_$k");
+    }
+    $d{label} =~ s/^\s+//;
+    $d{label} =~ s/\s+$//;
+    $d{label} ||= "$mon/temp$id";
+    map {$d{$_}/=1000} qw(input);
+    if ($d{input}>$ng->get('critical')) {
+      push @out,"$d{label} HIGH $d{input}/".$ng->get('critical');
+      $worst=max($worst,2);
+    } elsif ($d{input}>$ng->get('warning')) {
+      push @out,"$d{label} HIGH $d{input}/".$ng->get('warning');
+      $worst=max($worst,1);
+    } else {
+      push @out,"$d{label} $d{input}";
+    }
+  }
+}
+
+$np->nagios_exit([qw(OK WARNING CRITICAL)]->[$worst],join('; ',@out));
+
+sub getline {
+  my ($file)=@_;
+  open I,'<',$file or return '';
+  chomp (my $line=<I>);
+  close I;
+  return $line;
+}
