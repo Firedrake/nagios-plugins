@@ -76,3 +76,8 @@ importantly, accepts and regurgitates cookies during a redirection.
 Checks that the sub-version of the current kernel matches an installed
 package. Specifically, that the Debian package version of
 linux-image-$(uname -r) matches the last word of uname -v.
+
+:check_linux_hwmon
+
+Checks /sys/class/hwmon/... on a Linux system for fan speeds, input voltages
+and temperatures. Availability of hwmon seems to vary widely.
