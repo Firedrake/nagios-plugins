@@ -231,7 +231,7 @@ if ($tls) {
 
   my $x509 = Net::SSLeay::get_peer_certificate($ssl) || $np->nagios_die('no peer cert');
   my $subject=Net::SSLeay::X509_NAME_oneline(Net::SSLeay::X509_get_subject_name($x509));
-  my %h=grep /./,(split /\/([A-Za-z]+)=/,$subject);
+  my %h=grep /./,(split /\/([A-Za-z]+|[.\d]+)=/,$subject);
   $host=$h{CN}||$h{OU}||'unnamed cert';
   if ($opt{n} && $host ne $opt{n} && !match_san($x509,$opt{n})) {
     push @critfail,"Returned name $h{CN} doesn't match";
@@ -294,7 +294,7 @@ sub cb {
     my $a = str2time(Net::SSLeay::P_ASN1_UTCTIME_put2string(Net::SSLeay::X509_get_notBefore($x509)));
     my $b = str2time(Net::SSLeay::P_ASN1_UTCTIME_put2string(Net::SSLeay::X509_get_notAfter($x509)));
     my $t=time;
-    my %h=grep /./,(split /\/([A-Za-z]+)=/,$subject);
+    my %h=grep /./,(split /\/([A-Za-z]+|[.\d]+)=/,$subject);
     my $name=$h{CN}||$h{OU}||'unnamed cert';
     push @certchain,$name;
     my $exp=strftime('%d %b %Y',localtime($b));
