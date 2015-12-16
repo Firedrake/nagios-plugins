@@ -232,9 +232,13 @@ if ($tls) {
   my $x509 = Net::SSLeay::get_peer_certificate($ssl) || $np->nagios_die('no peer cert');
   my $subject=Net::SSLeay::X509_NAME_oneline(Net::SSLeay::X509_get_subject_name($x509));
   my %h=grep /./,(split /\/([A-Za-z]+|[.\d]+)=/,$subject);
-  $host=$h{CN}||$h{OU}||'unnamed cert';
-  if ($opt{n} && $host ne $opt{n} && !match_san($x509,$opt{n})) {
-    push @critfail,"Returned name $h{CN} doesn't match";
+  if (!defined($h{CN})) {
+    push @critfail,"No CN in certificate";
+  } else {
+    $host=$h{CN}||$h{OU}||'unnamed cert';
+    if ($opt{n} && $host ne $opt{n}) {
+      push @critfail,"Returned name $h{CN} doesn't match";
+    }
   }
   if ($ng->verbose)
   {
