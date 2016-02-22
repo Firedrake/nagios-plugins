@@ -43,6 +43,11 @@ $np->add_arg(
   help => 'Use inode change time, not mtime',
   default => '',
 );
+$np->add_arg(
+  spec => 'ageless|a',
+  help => 'Ignore file age, alert only if missing (implies -m)',
+  default => '',
+);
 
 $np->getopts;
 my $ng=$np->opts;
@@ -50,27 +55,36 @@ my %opt=map {$_->[0] => $ng->get($_->[1])} ([w => 'warning'],[c => 'critical']);
 map {$opt{$_->[0]}=$ng->get($_->[1])} ([f => 'file'],
                                        [m => 'missing'],
                                        [n => 'newer'],
-				       [i => 'inode']);
+				       [i => 'inode'],
+                                       [a => 'ageless']);
+
+if ($opt{a}) {
+  $opt{m}=1;
+  $opt{w}=-1;
+  $opt{c}=-1;
+}
 
 my @critfail;
 my @warnfail;
 my @ok;
 
 if (-e $opt{f}) {
-  my $age=time-(stat($opt{f}))[$opt{i}?10:9];
-  my $printage=strftime("%H:%M:%S",gmtime($age));
-  $printage =~ s/^00://;
-  if ($opt{n}) {
-    if ($age < $opt{c}) {
-      push @critfail,"$opt{f} is $printage old";
-    } elsif ($age < $opt{w}) {
-      push @warnfail,"$opt{f} is $printage old";
-    }
-  } else {
-    if ($age > $opt{c}) {
-      push @critfail,"$opt{f} is $printage old";
-    } elsif ($age > $opt{w}) {
-      push @warnfail,"$opt{f} is $printage old";
+  unless ($opt{a}) {
+    my $age=time-(stat($opt{f}))[$opt{i}?10:9];
+    my $printage=strftime("%H:%M:%S",gmtime($age));
+    $printage =~ s/^00://;
+    if ($opt{n}) {
+      if ($age < $opt{c}) {
+        push @critfail,"$opt{f} is $printage old";
+      } elsif ($age < $opt{w}) {
+        push @warnfail,"$opt{f} is $printage old";
+      }
+    } else {
+      if ($age > $opt{c}) {
+        push @critfail,"$opt{f} is $printage old";
+      } elsif ($age > $opt{w}) {
+        push @warnfail,"$opt{f} is $printage old";
+      }
     }
   }
 } else {
