@@ -81,3 +81,7 @@ linux-image-$(uname -r) matches the last word of uname -v.
 
 Checks /sys/class/hwmon/... on a Linux system for fan speeds, input voltages
 and temperatures. Availability of hwmon seems to vary widely.
+
+:check_zfs
+
+Checks ZFS for failures and capacity, needs sudo entries.
