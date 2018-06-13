@@ -1,0 +1,87 @@
+#! /usr/bin/perl -w
+
+use strict;
+use File::Find;
+use Parallel::ForkManager;
+
+# add to /etc/sudoers.d/nagios:
+#nagios        ALL=NOPASSWD: /usr/lib/nagios/plugins/check_ide_smart *
+
+my @da;
+find(sub{
+  if ((-f $_ || -l $_) && /^((?:ata|scsi)-.*)-part1/) {
+    push @da,'/dev/disk/by-id/'.$1;
+  }
+},'/dev/disk/by-id/');
+
+my @db;
+{
+  my %st;
+  foreach my $d (sort @da) {
+    my @k=stat($d);
+    unless (exists $st{$k[6]}) {
+      $st{$k[6]}=1;
+      push @db,$d;
+    }
+  }
+}
+
+my @results;
+my $worst=0;
+
+
+if (@db) {
+  my $pm = Parallel::ForkManager->new(20);
+  $pm->run_on_finish(
+    sub {
+      my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data_structure_reference) = @_;
+      if (defined $data_structure_reference) {
+        push @results,$data_structure_reference->[1];
+        my $code=$data_structure_reference->[0];
+        if ($code==3) {         # unknown
+          if ($worst != 2 && $worst != 1 && $worst != 4) {
+            $worst=$code;
+          }
+        } elsif ($code==4) {    # pending
+          if ($worst != 2 && $worst != 1) {
+            $worst=$code;
+          }
+        } elsif ($code==1) {    # warning
+          if ($worst != 2) {
+            $worst=$code;
+          }
+        } elsif ($code==2) {    # critical
+          $worst=$code;
+        }
+        if ($worst==3) {
+          $worst=$code;
+        } elsif ($worst==0 && $code!=0) {
+          $worst=$code;
+        } elsif ($worst==1 && $code!=2) {
+          $worst=$code;
+        }
+      }
+    }
+      );
+  foreach my $disk (@db) {
+    my $dn=$disk;
+    $dn =~ s/^.*-//;
+    $dn =~ s/^SATA_//;
+    my $pid=$pm->start and next;
+    open TEST,'-|',qw(sudo /usr/lib/nagios/plugins/check_ide_smart -d),$disk;
+    my $input=join('',<TEST>);
+    $input =~ s/\s+$//s;
+    $input =~ s/\n/, /g;
+    my $result="$dn $input";
+    close TEST;
+    my $code=$? >> 8;
+    $pm->finish(0,[$code,$result]);
+  }
+  $pm->wait_all_children;
+} else {
+  push @results,'No disks found';
+}
+
+print join('; ',@results),"\n";
+exit $worst;
+

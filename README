@@ -39,6 +39,12 @@ Intended to be run via NRPE; looks down /dev/disk/by-id and runs
 check_ide_smart on each distinct entry that starts with ata- or scsi-,
 then returns a summary result.
 
+:check_alldisks_ide_smart_parallel
+
+Much the same as the above, but uses Parallel::ForkManager to run all
+checks in parallel. (Because I have a server with 18 discs that was
+taking about .8 of a second per disc and overflowing the 10-second
+default plugin return window.)
 
 :check_aacraid
 
