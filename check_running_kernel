@@ -2,26 +2,36 @@
 
 # nagios: -epn
 use strict;
-use Nagios::Plugin;
+use Monitoring::Plugin;
+use Dpkg::Version;
 
-my $np=Nagios::Plugin->new(shortname => 'kernel',
+my $np=Monitoring::Plugin->new(shortname => 'kernel',
                            usage => "Usage: %s ",
                            version => 0.1,
                            blurb => 'Tests running kernel against Debian package version',
-                           url => 'http://firedrake.org/cgi-bin/gitweb.cgi?p=nagios-plugins.git',
+                           url => 'https://github.com/Firedrake/nagios-plugins',
 );
 
-my $r=getoutput(qw(uname -r));
+my $r;
+{ # latest version that will be run at next boot
+  opendir I,'/boot';
+  my @vm=sort map {/vmlinuz-(.*)$/;Dpkg::Version->new($1)} grep /^vmlinuz/,readdir I;
+  closedir I;
+  $r=$vm[-1]->as_string;
+}
 if ($r) {
+  # full dpkg version of latest version
   my $dpkgver=getoutput(qw(dpkg-query -W -f),'${Version}',"linux-image-$r");
-  my $runver=(split ' ',getoutput(qw(uname -v)))[-1];
-  if ($runver ne $dpkgver) {
-    $np->nagios_exit(CRITICAL,"Running $runver, want $dpkgver");
+  # full dpkg version of actual running version
+  my $runver=getoutput(qw(uname -v));
+  my %runver=map {$_ => 1} (split ' ',$runver);
+  if (!exists $runver{$dpkgver}) {
+    $np->plugin_exit(CRITICAL,"Running $runver, want $dpkgver");
   } else {
-    $np->nagios_exit(OK,"Running $runver");
+    $np->plugin_exit(OK,"Running $runver");
   }
 }
-$np->nagios_exit(UNKNOWN,"Can't get running version");
+$np->plugin_exit(UNKNOWN,"Can't get running version");
 
 sub getoutput {
   open I,'-|',@_;

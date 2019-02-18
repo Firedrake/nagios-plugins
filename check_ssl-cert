@@ -5,8 +5,8 @@ use strict;
 use Socket;
 use Net::SSLeay qw(GEN_DNS);
 use Date::Parse;
-use Nagios::Plugin;
-use Nagios::Plugin::Getopt;
+use Monitoring::Plugin;
+use Monitoring::Plugin::Getopt;
 use POSIX qw(strftime);
 
 my %errcode=(
@@ -44,11 +44,11 @@ my %errcode=(
   50 => 'X509_V_ERR_APPLICATION_VERIFICATION',
     );
 
-my $np=Nagios::Plugin->new(shortname => 'SSL',
+my $np=Monitoring::Plugin->new(shortname => 'SSL',
                            usage => 'Usage: %s -H <host> -w <warningdays> -c <criticaldays> -n <name> -p <port> -C <certpath>',
                            version => 0.1,
                            blurb => 'Tests SSL certificates with/without STARTTLS',
-                           url => 'http://firedrake.org/cgi-bin/gitweb.cgi?p=nagios-plugins.git',
+                           url => 'https://github.com/Firedrake/nagios-plugins',
 );
 
 $np->add_arg(
@@ -296,14 +296,14 @@ close S;
 my $message=join('; ',@critfail,@warnfail);
 
 if (@critfail) {
-  $np->nagios_exit(CRITICAL,$message);
+  $np->plugin_exit(CRITICAL,$message);
 } elsif (@warnfail) {
-  $np->nagios_exit(WARNING,$message);
+  $np->plugin_exit(WARNING,$message);
 } else {
   $message = "Port $opt{p} is $host";
   $message = join('; ',$message, @ok )
     if $ng->verbose;
-  $np->nagios_exit(OK,$message);
+  $np->plugin_exit(OK,$message);
   exit 0;
 }
 

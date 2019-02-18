@@ -2,15 +2,15 @@
 
 # nagios: -epn
 use strict;
-use Nagios::Plugin;
-use Nagios::Plugin::Getopt;
+use Monitoring::Plugin;
+use Monitoring::Plugin::Getopt;
 use POSIX qw(strftime);
 
-my $np=Nagios::Plugin->new(shortname => 'fileage',
+my $np=Monitoring::Plugin->new(shortname => 'fileage',
                            usage => 'Usage: %s -f <filename> -w <warningsec> -c <criticalsec> (-m) (-n)',
                            version => 0.1,
                            blurb => 'Tests file age',
-                           url => 'http://firedrake.org/cgi-bin/gitweb.cgi?p=nagios-plugins.git',
+                           url => 'https://github.com/Firedrake/nagios-plugins',
 );
 
 $np->add_arg(
@@ -98,10 +98,10 @@ if (-e $opt{f}) {
 my $message=join('; ',@critfail,@warnfail);
 
 if (@critfail) {
-  $np->nagios_exit(CRITICAL,$message);
+  $np->plugin_exit(CRITICAL,$message);
 } elsif (@warnfail) {
-  $np->nagios_exit(WARNING,$message);
+  $np->plugin_exit(WARNING,$message);
 } else {
-  $np->nagios_exit(OK,join('; ',@ok) || "$opt{f} OK");
+  $np->plugin_exit(OK,join('; ',@ok) || "$opt{f} OK");
   exit 0;
 }
