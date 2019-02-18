@@ -1,5 +1,9 @@
 Nagios plugins by RogerBW
 
+Update of 18 February 2019: switch from the Nagios::Plugin module to
+Monitoring::Plugin to match the CPAN renaming. If you're still using
+Nagios::Plugin, you can switch back: just change Monitoring::Plugin to
+Nagios::Plugin, and plugin_exit to nagios_exit.
 
 :check_ssl-cert
 
@@ -80,8 +84,8 @@ importantly, accepts and regurgitates cookies during a redirection.
 :check_running_kernel
 
 Checks that the sub-version of the current kernel matches an installed
-package. Specifically, that the Debian package version of
-linux-image-$(uname -r) matches the last word of uname -v.
+package. Specifically, that the Debian package version of the latest
+kernel in /boot matches a word in uname -v.
 
 :check_linux_hwmon
 
