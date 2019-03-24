@@ -256,6 +256,12 @@ if ($tls) {
   }
 
   my $ssl = Net::SSLeay::new($ctx) or $np->nagios_die("Failed to create SSL $!");
+  if ($opt{n}) {
+    my $rv=Net::SSLeay::set_tlsext_host_name($ssl,$opt{n});
+    unless ($rv==1) {
+      $np->nagios_die('no tlsext');
+    }
+  }
   Net::SSLeay::set_fd($ssl, fileno(S));   # Must use fileno
   my $res = Net::SSLeay::connect($ssl);
   unless ($res) {
@@ -266,12 +272,13 @@ if ($tls) {
 
   my $x509 = Net::SSLeay::get_peer_certificate($ssl) || $np->nagios_die('no peer cert');
   my $subject=Net::SSLeay::X509_NAME_oneline(Net::SSLeay::X509_get_subject_name($x509));
+  my %san=map {$_ => 1} Net::SSLeay::X509_get_subjectAltNames($x509);
   my %h=grep /./,(split /\/([A-Za-z]+|[.\d]+)=/,$subject);
   if (!defined($h{CN})) {
     push @critfail,"No CN in certificate";
   } else {
     $host=$h{CN}||$h{OU}||'unnamed cert';
-    if ($opt{n} && $host ne $opt{n}) {
+    if ($opt{n} && $host ne $opt{n} && !exists $san{$opt{n}}) {
       push @critfail,"Returned name $h{CN} doesn't match";
     }
   }

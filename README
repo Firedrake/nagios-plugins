@@ -5,6 +5,9 @@ Monitoring::Plugin to match the CPAN renaming. If you're still using
 Nagios::Plugin, you can switch back: just change Monitoring::Plugin to
 Nagios::Plugin, and plugin_exit to nagios_exit.
 
+Update as of 24 March 2019: check_ssl-cert now transparently supports
+SNI verification.
+
 :check_ssl-cert
 
 This is the SSL equivalent of check_tcp; it checks a TCP port (IPv4
