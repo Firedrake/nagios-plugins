@@ -12,10 +12,11 @@ SNI verification.
 
 This is the SSL equivalent of check_tcp; it checks a TCP port (IPv4
 only) to make sure (a) it can establish an SSL connection and (b) that
-the certificate presented is valid. Ports 25, 110 and 143 will be
-handled with the STARTTLS procedures appropriate to those protocols;
-other ports (e.g. 443) will attempt a direct SSL connection. (This is
-usually the right thing to do.)
+the certificate presented is valid. Ports 25/587 (SMTP), 110 (POP3),
+119 (NNTP), 143 (IMAP4) and 5222 (XMPP) will be handled with the
+STARTTLS procedures appropriate to those protocols; other ports (e.g.
+443) will attempt a direct SSL connection. (This is usually the right
+thing to do.)
 
 Parameters:
 
@@ -53,6 +54,7 @@ checks in parallel. (Because I have a server with 18 discs that was
 taking about .8 of a second per disc and overflowing the 10-second
 default plugin return window.)
 
+
 :check_aacraid
 
 Intended to be run via NRPE; assumes you have an Adaptec RAID controller
@@ -88,12 +90,16 @@ importantly, accepts and regurgitates cookies during a redirection.
 
 Checks that the sub-version of the current kernel matches an installed
 package. Specifically, that the Debian package version of the latest
-kernel in /boot matches a word in uname -v.
+kernel in /boot matches a word in uname -v. This won't work if you go
+far from Debian on basic Intel platforms - for example it's of no use
+on Raspbian.
+
 
 :check_linux_hwmon
 
 Checks /sys/class/hwmon/... on a Linux system for fan speeds, input voltages
 and temperatures. Availability of hwmon seems to vary widely.
+
 
 :check_zfs
 

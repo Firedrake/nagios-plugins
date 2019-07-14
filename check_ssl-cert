@@ -228,6 +228,34 @@ if ($opt{p} == 25 || $opt{p} == 587) { # SMTP with TLS
       }
     }
   }
+} elsif ($opt{p} == 5222) { # XMPP with TLS
+  my $buffer='';
+  my $ehlo=$opt{n} || 'localhost';
+  send(S, "<?xml version='1.0' ?><stream:stream to='$ehlo' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>", 0);
+  $buffer='';
+  while ($buffer !~ /<\?xml/i) {
+    recv(S, $buffer, 8192,0);
+    if ($buffer =~ /<starttls/i) {
+      $tls=1;
+      last;
+    } else {
+      last;
+    }
+  }
+  if ($tls) {
+    $tls=0;
+    send(S, "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>", 0);
+    $buffer='';
+    while ($buffer !~ /^<proceed/m) {
+      recv(S, $buffer, 8192,0);
+      if ($buffer =~ /^<proceed/m) {
+        $tls=1;
+      } else {
+        $tls=0;
+        last;
+      }
+    }
+  }
 } else {
   $tls=1;
 }
