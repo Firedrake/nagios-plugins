@@ -4,11 +4,6 @@
 use strict;
 use warnings;
 
-# sudoers:
-# nagios ALL=NOPASSWD: /sbin/zpool list -H -o name
-# nagios ALL=NOPASSWD: /sbin/zpool status *
-# nagios ALL=NOPASSWD: /sbin/zfs list -H -o avail,used *
-
 use Monitoring::Plugin;
 use Monitoring::Plugin::Getopt;
 
@@ -40,10 +35,10 @@ my @critfail;
 my @warnfail;
 my @ok;
 
-open POOLS,'-|',qw(sudo /sbin/zpool list -H -o name);
+open POOLS,'-|',qw(/sbin/zpool list -H -o name);
 while (my $pool=<POOLS>) {
   chomp $pool;
-  open SYS,'-|',qw(sudo /sbin/zpool status),$pool;
+  open SYS,'-|',qw(/sbin/zpool status),$pool;
   while (<SYS>) {
     chomp;
     if (/state: (.*)/ && $1 ne 'ONLINE') {
@@ -51,7 +46,7 @@ while (my $pool=<POOLS>) {
     }
   }
   close SYS;
-  open SYS,'-|',qw(sudo /sbin/zfs list -H -o),'avail,used',$pool;
+  open SYS,'-|',qw(/sbin/zfs list -H -o),'avail,used',$pool;
   while (my $u=<SYS>) {
     chomp $u;
     my ($avail,$used)=map {parsesi($_)} split ' ',$u;
