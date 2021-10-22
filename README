@@ -103,4 +103,4 @@ and temperatures. Availability of hwmon seems to vary widely.
 
 :check_zfs
 
-Checks ZFS for failures and capacity, needs sudo entries.
+Checks ZFS for failures and capacity.
